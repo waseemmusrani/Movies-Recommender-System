@@ -1,0 +1,202 @@
+# ==========================================================
+# Movie Recommendation System - Model Training
+# ==========================================================
+
+# -------------------- Import Libraries --------------------
+
+import ast
+import pickle
+
+import pandas as pd
+from nltk.stem import PorterStemmer
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+# -------------------- Load Dataset --------------------
+
+movies = pd.read_csv("tmdb_5000_movies.csv")
+credits = pd.read_csv("tmdb_5000_credits.csv")
+
+# -------------------- Merge Datasets --------------------
+
+movies = movies.merge(credits, on="title")
+
+# -------------------- Select Required Columns --------------------
+
+movies = movies[
+    [
+        "movie_id",
+        "title",
+        "overview",
+        "genres",
+        "keywords",
+        "cast",
+        "crew"
+    ]
+]
+
+# -------------------- Data Cleaning --------------------
+
+movies.dropna(inplace=True)
+
+
+# ==========================================================
+# Feature Extraction Functions
+# ==========================================================
+
+def convert(text):
+    """
+    Extract all names from JSON column.
+    """
+    return [item["name"] for item in ast.literal_eval(text)]
+
+
+def convert_cast(text):
+    """
+    Extract first 3 cast members.
+    """
+    cast = []
+
+    for i, item in enumerate(ast.literal_eval(text)):
+        if i == 3:
+            break
+        cast.append(item["name"])
+
+    return cast
+
+
+def fetch_director(text):
+    """
+    Extract movie director.
+    """
+    for item in ast.literal_eval(text):
+        if item["job"] == "Director":
+            return [item["name"]]
+
+    return []
+
+
+# ==========================================================
+# Apply Feature Extraction
+# ==========================================================
+
+movies["genres"] = movies["genres"].apply(convert)
+
+movies["keywords"] = movies["keywords"].apply(convert)
+
+movies["cast"] = movies["cast"].apply(convert_cast)
+
+movies["crew"] = movies["crew"].apply(fetch_director)
+
+movies["overview"] = movies["overview"].apply(lambda x: x.split())
+
+
+# ==========================================================
+# Remove Spaces
+# Example:
+# Sam Worthington -> SamWorthington
+# ==========================================================
+
+for feature in ["genres", "keywords", "cast", "crew"]:
+
+    movies[feature] = movies[feature].apply(
+        lambda x: [i.replace(" ", "") for i in x]
+    )
+
+
+# ==========================================================
+# Create Tags
+# ==========================================================
+
+movies["tags"] = (
+    movies["overview"]
+    + movies["genres"]
+    + movies["keywords"]
+    + movies["cast"]
+    + movies["crew"]
+)
+
+
+# ==========================================================
+# Create Final DataFrame
+# ==========================================================
+
+new_df = movies[["movie_id", "title", "tags"]].copy()
+
+new_df["tags"] = new_df["tags"].apply(lambda x: " ".join(x).lower())
+
+
+# ==========================================================
+# Stemming
+# ==========================================================
+
+stemmer = PorterStemmer()
+
+
+def stem(text):
+    return " ".join(stemmer.stem(word) for word in text.split())
+
+
+new_df["tags"] = new_df["tags"].apply(stem)
+
+
+# ==========================================================
+# Vectorization
+# ==========================================================
+
+cv = CountVectorizer(
+    max_features=5000,
+    stop_words="english"
+)
+
+vectors = cv.fit_transform(new_df["tags"]).toarray()
+
+
+# ==========================================================
+# Similarity Matrix
+# ==========================================================
+
+similarity = cosine_similarity(vectors)
+
+
+# ==========================================================
+# Recommendation Function
+# ==========================================================
+
+def recommend(movie_name):
+
+    if movie_name not in new_df["title"].values:
+        print("Movie not found.")
+        return
+
+    movie_index = new_df[new_df["title"] == movie_name].index[0]
+
+    distances = similarity[movie_index]
+
+    recommended_movies = sorted(
+        enumerate(distances),
+        key=lambda x: x[1],
+        reverse=True
+    )[1:6]
+
+    print("\nRecommended Movies:\n")
+
+    for movie in recommended_movies:
+        print(new_df.iloc[movie[0]].title)
+
+
+# ==========================================================
+# Save Model
+# ==========================================================
+
+pickle.dump(
+    new_df.to_dict(),
+    open("movies_dict.pkl", "wb")
+)
+
+pickle.dump(
+    similarity,
+    open("similarity.pkl", "wb")
+)
+
+print("Model trained successfully.")

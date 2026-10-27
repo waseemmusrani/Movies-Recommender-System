@@ -1,0 +1,29 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Large generated / downloaded files (see README: generate them locally)
+*.pkl
+tmdb_5000_movies.csv
+tmdb_5000_credits.csv
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Jupyter / build / misc
+.ipynb_checkpoints/
+build/
+dist/
+*.egg-info/
+.env.*
+!.env.example
+.streamlit/secrets.toml
+*.log
+Thumbs.db
