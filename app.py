@@ -64,8 +64,33 @@ def fetch_movie_details(movie_id):
 
 
 # ---------- Load model files ----------
-movies = pd.DataFrame(pickle.load(open("movies_dict.pkl", "rb")))
-similarity = pickle.load(open("similarity.pkl", "rb"))
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+
+@st.cache_resource
+def load_recommender():
+    # Small model-data file
+    movies = pd.DataFrame(
+        pickle.load(open("movies_dict.pkl", "rb"))
+    )
+
+    # Recreate vectors from saved tags
+    cv = CountVectorizer(
+        max_features=5000,
+        stop_words="english"
+    )
+
+    vectors = cv.fit_transform(movies["tags"])
+
+    # Generate similarity matrix in memory.
+    # No similarity.pkl required.
+    similarity = cosine_similarity(vectors)
+
+    return movies, similarity
+
+
+movies, similarity = load_recommender()
 
 
 # ---------- Recommendation logic ----------
